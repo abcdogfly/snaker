@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Retro Snaker</title>
+  <style>
+    html, body, h1, h3, p, div{
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      font-size: 26px;
+      font-weight: 800;
+      text-align: center;
+      margin-top: 30px;
+    }
+    h3 {
+      font-size: 18px;
+      font-weight: 500;
+      text-align: center;
+      margin-top: 10px;
+    }
+    #score {
+      font-weight: 600;
+      color: rgb(221, 0, 27);
+    }
+    #top {
+      font-weight: 600;
+      color: rgb(221, 0, 27);
+      margin-right: 20px;
+    }
+    h3 .level {
+      margin: 0 5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    h3 .level_now {
+      color: rgb(221, 0, 27);
+    }
+
+    h5 {
+      font-size: 20px;
+      font-weight: 500;
+      text-align: center;
+      margin-top: 20px;
+      cursor: pointer;
+      letter-spacing: 2px;
+      line-height: 5px;
+    }
+    .restart {
+      font-size: 26px;
+      font-weight: 800;
+      color: rgb(255, 0, 106);
+      letter-spacing: 3px;
+    }
+    .tips {
+      margin-top: 0;
+      font-size: 14px;
+      line-height: 2px;
+    }
+
+    /* 正题 */
+    #box {
+      position: relative;
+      width: 1000px;
+      height: 600px;
+      margin: 50px auto;
+      border: 10px solid #000;
+    }
+    /* 蛇 */
+    .snake {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      background: #000;
+    }
+    #point {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      background: red;
+    }
+  </style>
+</head>
+<body>
+  <h1>Retro Snaker</h1>
+  <h3>top：<span id="top">0</span>score：<span id="score">0</span></h3>
+  <h3>speed: 
+    <span class="level" onclick="control_speed(1)">fast</span>
+    <span class="level level_now" onclick="control_speed(2)">middle</span>
+    <span class="level" onclick="control_speed(3)">slow</span>
+  </h3>
+  <h5 class="restart" onclick="init()">restart</h5>
+  <h5 class="tips">tips: control ↑↓←→</h5>
+  <!-- 正题 -->
+  <div id="box"></div>
+</body>
+<script type="text/javascript">
+  const box = document.getElementById('box');
+  const topShow = document.getElementById('top');
+  const scoreShow = document.getElementById('score');
+  const box_width_px = getComputedStyle(box,null).width
+  const box_width = Number(box_width_px.substring(0, box_width_px.length - 2))
+  const box_height_px = getComputedStyle(box,null).height
+  const box_height = Number(box_height_px.substring(0, box_height_px.length - 2))
+
+  let go = null // 定时器
+  let speed = 100 // 速度
+  let top_score = localStorage.getItem("retro_snaker") ? localStorage.getItem("retro_snaker") : 0 // 历史总分
+  topShow.innerHTML = top_score
+  let score = 0 // 总分
+  let random_point_position = [] //随机点坐标
+  // 默认方向向上
+  let direction = 1;
+  // 初始5个点在中央 分数清空
+  function init() {
+    score = 0
+    scoreShow.innerHTML = score
+    direction = 1
+    const hasSnake = box.getElementsByClassName('snake').length
+    if (hasSnake) [...box.getElementsByClassName('snake')].forEach(item => box.removeChild(item)); clearInterval(go)
+    for (let i = 0; i < 5; i++) {
+      let p = document.createElement("p")
+      p.setAttribute("class",'snake')
+      p.setAttribute("style",`top: ${300 + 10 * i}px;left: 500px;`)
+      box.appendChild(p)
+    }
+  }
+  init()
+  // 设置随机的点
+  function random_point() {
+    let radom_x = Math.ceil(Math.random() * box_width)
+    let random_y = Math.ceil(Math.random() * box_height)
+    let position_x = radom_x - radom_x % 10  === box_width ? box_width - 10 : radom_x - radom_x % 10
+    let position_y = random_y - random_y % 10 === box_height ? box_height - 10 : random_y - random_y % 10
+    let point = document.createElement("div")
+    point.setAttribute("id",'point')
+    point.setAttribute("style",`left: ${position_x}px;top: ${position_y}px;`)
+    random_point_position = [position_x, position_y]
+    box.appendChild(point)
+  }
+  random_point()
+
+  // 实时获取蛇蛇所有坐标位置 来判断是否触壁或撞到自身
+  function get_snake_position() {
+    let [...pList] = box.getElementsByClassName('snake')
+    // 蛇蛇身上每一格的坐标
+    let now_snake_point_position = [...pList].map((item, index) => {
+      let left = item.style.left
+      let top = item.style.top
+      return JSON.stringify([Number(left.substring(0, left.length - 2)), Number(top.substring(0, top.length - 2))])
+    })
+    now_snake_point_position.splice(0,1)
+    // 蛇的最前面那一格的坐标位置
+    let first_left_style = pList[0].style.left
+    let first_left = Number(first_left_style.substring(0, first_left_style.length - 2))
+    let first_top_style = pList[0].style.top
+    let first_top = Number(first_top_style.substring(0, first_top_style.length - 2))
+    // 判断头是否触碰到点
+    if (first_left === -10 || first_left === box_width || first_top === -10 || first_top === box_height) { // 触碰墙壁
+      clearInterval(go)
+      alert("GAME OVER!!!!!")
+    } else if (now_snake_point_position.includes(JSON.stringify([first_left,first_top]))) { // 触碰自身
+      clearInterval(go)
+      alert("GAME OVER!!!!!")
+    } else { // 照常移动
+      move(direction, pList, first_left, first_top)
+    }
+  }
+
+  // 判断下一步是不是吃
+  function nextIsEat(direction, random_point_position, first_left, first_top) {
+    switch(direction) {
+      // 上
+      case 1: 
+        return random_point_position[0] === first_left && random_point_position[1] === first_top - 10 ? false : true
+      // 下
+      case 2: 
+        return random_point_position[0] === first_left && random_point_position[1] === first_top + 10 ? false : true
+      // 左
+      case 3: 
+        return random_point_position[0] === first_left - 10 && random_point_position[1] === first_top ? false : true
+        // 右
+      case 4: 
+        return random_point_position[0] === first_left + 10 && random_point_position[1] === first_top ? false : true
+    }
+  }
+
+  // 蛇蛇移动
+  function move(direction, pList, first_left, first_top) {
+    // 往最前面的那格前进的方向添加一格
+    if (nextIsEat(direction, random_point_position, first_left,first_top)) {
+      let p = document.createElement("p")
+      p.setAttribute("class",'snake')
+      // 判断方向
+      switch(direction) {
+        // 上
+        case 1: 
+          p.setAttribute("style",`left: ${first_left}px;top: ${first_top - 10}px;`)
+          break
+        // 下
+        case 2: 
+          p.setAttribute("style",`left: ${first_left}px;top: ${first_top + 10}px;`)
+          break
+        // 左
+        case 3: 
+          p.setAttribute("style",`left: ${first_left - 10}px;top: ${first_top}px;`)
+          break
+          // 右
+        case 4: 
+          p.setAttribute("style",`left: ${first_left + 10}px;top: ${first_top}px;`)
+          break
+      }
+      box.insertBefore(p, pList[0])
+      // 移除最后一格
+      let last = pList[pList.length - 1]
+      box.removeChild(last)
+    } else { // 吃掉随机点
+      eat(pList)
+    }
+  }
+
+  // 蛇蛇吃掉果子身体+1
+   function eat(pList) {
+    // 加分
+    score += 10
+    scoreShow.innerHTML = score
+    // 分数超过历史总分
+    if (score > top_score) topShow.innerHTML = score; localStorage.setItem("retro_snaker", score);
+    // 移除随机点
+    const point = document.getElementById('point')
+    box.removeChild(point)
+    // 把随机点和蛇融合
+    let p = document.createElement("p")
+    p.setAttribute("class",'snake')
+    p.setAttribute("style",`left: ${random_point_position[0]}px;top: ${random_point_position[1]}px;`)
+    box.insertBefore(p, pList[0])
+    // 刷新新的点
+    random_point()
+  }
+
+  // 键盘方向键监听事件
+  let flagTime = true // 按键一秒内只监听一次
+  document.onkeydown = keydown_setTimeout
+
+  function keydown_setTimeout(e) {
+    if(flagTime) change_direction(e.keyCode)
+    flagTime = false
+    setTimeout(() => { flagTime = true }, 100)
+  }
+
+  function change_direction(keyCode) {
+    clearInterval(go)
+    switch (keyCode) {
+      case 38:
+        if(direction === 3 || direction === 4) direction = 1
+        break
+      case 40:
+        if(direction === 3 || direction === 4) direction = 2
+        break
+      case 37:
+        if(direction === 1 || direction === 2) direction = 3
+        break
+      case 39:
+        if(direction === 1 || direction === 2) direction = 4
+        break
+    }
+    go = window.setInterval(get_snake_position, speed)
+  }
+
+  // 控制速度
+  function control_speed(type) {
+    const [...levelList] = document.getElementsByClassName('level')
+    levelList.forEach((item, index) => {
+      if (index === (type - 1)) {
+        item.setAttribute("class", "level level_now")
+      } else {
+        item.setAttribute("class", "level")
+      }
+    })
+    speed = 50 * type
+    init()
+  }
+</script>
+</html>
